@@ -1,0 +1,50 @@
+---
+# Development compose — TEI and the production Postgres are expected to be external.
+# An optional local pgvector container is included and can be enabled for offline dev.
+#
+# Usage:
+#   docker compose up knowledge-injector          # run-once against external services
+#   docker compose --profile local-db up          # start with a local pgvector instance
+
+services:
+  knowledge-injector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    command: ["python", "-m", "knowledge_injector", "run-once"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+    networks:
+      - knowledge-net
+
+  # Optional local postgres/pgvector — activate with: --profile local-db
+  postgres:
+    image: pgvector/pgvector:pg16
+    profiles:
+      - local-db
+    environment:
+      POSTGRES_DB: homelab_ai
+      POSTGRES_USER: knowledge_injector
+      POSTGRES_PASSWORD: change-me
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U knowledge_injector -d homelab_ai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - knowledge-net
+
+volumes:
+  pgdata:
+
+networks:
+  knowledge-net:
+    driver: bridge
