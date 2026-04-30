@@ -1,8 +1,9 @@
 """Port interfaces (abstract base classes) defining the contracts for infrastructure adapters."""
 
 from abc import ABC, abstractmethod
-from typing import Optional
 from uuid import UUID
+
+from sqlalchemy.orm import Session
 
 from knowledge_injector.domain.models import (
     FileEntry,
@@ -42,11 +43,11 @@ class KnowledgeSourceRepositoryPort(ABC):
     """Port for persisting KnowledgeSource entities."""
 
     @abstractmethod
-    def upsert(self, source: KnowledgeSource) -> KnowledgeSource:
+    def upsert(self, source: KnowledgeSource, session: Session) -> KnowledgeSource:
         """Insert or update a knowledge source, returning the persisted entity."""
 
     @abstractmethod
-    def find_by_name(self, name: str) -> Optional[KnowledgeSource]:
+    def find_by_name(self, name: str, session: Session) -> KnowledgeSource | None:
         """Find a knowledge source by its unique name."""
 
 
@@ -54,15 +55,15 @@ class IngestionRunRepositoryPort(ABC):
     """Port for persisting IngestionRun entities."""
 
     @abstractmethod
-    def create(self, run: IngestionRun) -> IngestionRun:
+    def create(self, run: IngestionRun, session: Session) -> IngestionRun:
         """Persist a new ingestion run."""
 
     @abstractmethod
-    def update(self, run: IngestionRun) -> IngestionRun:
+    def update(self, run: IngestionRun, session: Session) -> IngestionRun:
         """Update an existing ingestion run."""
 
     @abstractmethod
-    def find_by_id(self, run_id: UUID) -> Optional[IngestionRun]:
+    def find_by_id(self, run_id: UUID, session: Session) -> IngestionRun | None:
         """Find an ingestion run by ID."""
 
 
@@ -70,21 +71,23 @@ class KnowledgeDocumentRepositoryPort(ABC):
     """Port for persisting KnowledgeDocument entities."""
 
     @abstractmethod
-    def upsert(self, document: KnowledgeDocument) -> KnowledgeDocument:
+    def upsert(self, document: KnowledgeDocument, session: Session) -> KnowledgeDocument:
         """Insert or update a document, returning the persisted entity."""
 
     @abstractmethod
     def find_by_source_and_path(
-        self, source_id: UUID, path: str
-    ) -> Optional[KnowledgeDocument]:
+        self, source_id: UUID, path: str, session: Session
+    ) -> KnowledgeDocument | None:
         """Find a document by its source and path."""
 
     @abstractmethod
-    def find_active_by_source(self, source_id: UUID) -> list[KnowledgeDocument]:
+    def find_active_by_source(
+        self, source_id: UUID, session: Session
+    ) -> list[KnowledgeDocument]:
         """List all active documents for a given source."""
 
     @abstractmethod
-    def mark_deleted(self, document_id: UUID) -> None:
+    def mark_deleted(self, document_id: UUID, session: Session) -> None:
         """Soft-delete a document."""
 
 
@@ -93,10 +96,10 @@ class KnowledgeChunkRepositoryPort(ABC):
 
     @abstractmethod
     def replace_for_document(
-        self, document_id: UUID, chunks: list[KnowledgeChunk]
+        self, document_id: UUID, chunks: list[KnowledgeChunk], session: Session
     ) -> list[KnowledgeChunk]:
         """Replace all chunks for a document, returning the newly persisted ones."""
 
     @abstractmethod
-    def delete_for_document(self, document_id: UUID) -> int:
+    def delete_for_document(self, document_id: UUID, session: Session) -> int:
         """Delete all chunks for a document, returning the count deleted."""
