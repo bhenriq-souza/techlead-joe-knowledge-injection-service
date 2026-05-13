@@ -165,9 +165,11 @@ spec:
 
 ## Validated AI Lab environment
 
-This service is designed to run against the **WSL AI Lab** stack defined in
-`techlead-joe-infra/experiments/wsl-ai-lab/`:
+This service is designed to run against the **AI Lab** stack (Docker Compose + NVIDIA Container Toolkit on the local Ubuntu workstation).
+Setup guide: `techlead-joe-infra/docs/prompts/setup-ai-lab-docker-ollama-tei.md`.
 
-- TEI serving `BAAI/bge-small-en-v1.5` (384-dim) at `http://127.0.0.1:8080`
-- PostgreSQL 16 with pgvector in Docker
+AI Lab hardware: AMD Ryzen 9 7900X / RTX 5070 12 GB GDDR7 / 64 GB DDR5 (`192.168.15.103`, same LAN as homelab).
+
+- TEI serving `BAAI/bge-small-en-v1.5` (384-dim) at `http://192.168.15.103:8080`
+- PostgreSQL 16 with pgvector in Docker (on homelab cluster — `192.168.15.97`)
 - NVIDIA container toolkit (GPU for other services; TEI runs on CPU here)
