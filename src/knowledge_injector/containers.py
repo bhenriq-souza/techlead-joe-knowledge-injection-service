@@ -7,8 +7,8 @@ from knowledge_injector.application.ingestion_service import IngestionService
 from knowledge_injector.application.scheduling_service import SchedulingService
 from knowledge_injector.config import AppSettings
 from knowledge_injector.infrastructure.db.database import Database
-from knowledge_injector.infrastructure.embeddings.tei_embeddings_client import (
-    TeiEmbeddingsClient,
+from knowledge_injector.infrastructure.embeddings.ollama_embeddings_client import (
+    OllamaEmbeddingsClient,
 )
 from knowledge_injector.infrastructure.git.git_repository_client import (
     GitRepositoryClient,
@@ -18,7 +18,7 @@ from knowledge_injector.infrastructure.git.git_repository_client import (
 class Container(containers.DeclarativeContainer):
     """Application-level DI container.
 
-    All dependencies are wired here. To swap an adapter (e.g., replace TEI with
+    All dependencies are wired here. To swap an adapter (e.g., replace Ollama with
     another embeddings provider), change only the relevant provider below.
     """
 
@@ -46,10 +46,10 @@ class Container(containers.DeclarativeContainer):
         auth_mode=settings.provided.knowledge_source.repo_auth_mode,
     )
 
-    embeddings_client: providers.Factory[TeiEmbeddingsClient] = providers.Factory(
-        TeiEmbeddingsClient,
-        base_url=settings.provided.tei.base_url,
-        embeddings_path=settings.provided.tei.embeddings_path,
+    embeddings_client: providers.Factory[OllamaEmbeddingsClient] = providers.Factory(
+        OllamaEmbeddingsClient,
+        base_url=settings.provided.ollama.base_url,
+        embeddings_path=settings.provided.ollama.embeddings_path,
         model=settings.provided.embeddings.model,
         dimensions=settings.provided.embeddings.dimensions,
     )

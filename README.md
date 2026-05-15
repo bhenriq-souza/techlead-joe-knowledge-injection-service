@@ -2,10 +2,10 @@
 
 > Part of the **Tech Lead Joe** ecosystem.
 
-A Python service that reads versioned Git repositories, generates embeddings via [TEI](https://github.com/huggingface/text-embeddings-inference), and persists the resulting vector knowledge base in PostgreSQL/pgvector for downstream RAG workloads.
+A Python service that reads versioned Git repositories, generates embeddings via [Ollama](https://ollama.com), and persists the resulting vector knowledge base in PostgreSQL/pgvector for downstream RAG workloads.
 
 ```
-Git docs ──► knowledge-injector ──► TEI embeddings ──► PostgreSQL/pgvector ──► RAG service
+Git docs ──► knowledge-injector ──► Ollama embeddings ──► PostgreSQL/pgvector ──► RAG service
 ```
 
 ---
@@ -16,7 +16,7 @@ Git docs ──► knowledge-injector ──► TEI embeddings ──► Postgre
 - Identify eligible documents (Markdown, YAML, plain text, etc.).
 - Detect new, changed, and deleted files using content hashing.
 - Chunk documents respecting Markdown structure.
-- Generate embeddings using the TEI OpenAI-compatible endpoint.
+- Generate embeddings using the Ollama `/api/embed` endpoint.
 - Persist sources, documents, chunks, and embeddings in PostgreSQL.
 - Record every ingestion run for auditability.
 - Skip unchanged content — no redundant re-embedding.
@@ -33,7 +33,7 @@ Git docs ──► knowledge-injector ──► TEI embeddings ──► Postgre
 | uv | latest |
 | Docker | 24+ |
 | PostgreSQL | 16+ with pgvector |
-| TEI | any OpenAI-compatible release |
+| Ollama | latest |
 
 ---
 
@@ -67,8 +67,8 @@ Key variables:
 | `KNOWLEDGE_REPO_URL` | Git repository to ingest |
 | `KNOWLEDGE_REPO_BRANCH` | Branch to track |
 | `POSTGRES_HOST` / `POSTGRES_DB` | Target database |
-| `TEI_BASE_URL` | Text Embeddings Inference endpoint |
-| `EMBEDDINGS_MODEL` | Model name (default: `BAAI/bge-small-en-v1.5`) |
+| `OLLAMA_BASE_URL` | Ollama server endpoint |
+| `EMBEDDINGS_MODEL` | Model name (default: `nomic-embed-text`) |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | Chunking parameters (chars) |
 
 ---
@@ -96,6 +96,14 @@ docker compose run --rm knowledge-injector
 ## Project structure
 
 ```
+agents/
+├── SKILL.md                   # Master context document for AI agents
+└── prompts/                   # Isolated per-phase agent prompts
+    ├── passo-01-database-engine.md
+    ├── passo-02-repositories.md
+    └── passo-03-git-repository-client.md
+docs/
+└── implementation-plan.md     # 8-phase MVP roadmap
 src/knowledge_injector/
 ├── __main__.py            # python -m knowledge_injector entry point
 ├── main.py                # Bootstrap: DI container + logging + CLI
@@ -110,7 +118,7 @@ src/knowledge_injector/
 │   └── scheduling_service.py  # run-loop scheduling helper
 ├── infrastructure/
 │   ├── git/               # GitRepositoryClient (GitPython)
-│   ├── embeddings/        # TeiEmbeddingsClient (httpx)
+│   ├── embeddings/        # OllamaEmbeddingsClient (httpx)
 │   ├── db/                # SQLAlchemy + Alembic migrations
 │   └── logging/           # structlog configuration
 └── cli/
@@ -127,7 +135,7 @@ src/knowledge_injector/
 | **2** | Git source + file discovery | 🔜 Next |
 | **3** | PostgreSQL + Alembic migrations | 🔜 |
 | **4** | Markdown-aware chunking | 🔜 |
-| **5** | TEI embeddings integration | 🔜 |
+| **5** | Ollama embeddings integration | 🔜 |
 | **6** | Incremental processing (skip unchanged) | 🔜 |
 | **7** | Kubernetes CronJob manifests | 🔜 |
 
@@ -166,10 +174,9 @@ spec:
 ## Validated AI Lab environment
 
 This service is designed to run against the **AI Lab** stack (Docker Compose + NVIDIA Container Toolkit on the local Ubuntu workstation).
-Setup guide: `techlead-joe-infra/docs/prompts/setup-ai-lab-docker-ollama-tei.md`.
 
 AI Lab hardware: AMD Ryzen 9 7900X / RTX 5070 12 GB GDDR7 / 64 GB DDR5 (`192.168.15.103`, same LAN as homelab).
 
-- TEI serving `BAAI/bge-small-en-v1.5` (384-dim) at `http://192.168.15.103:8080`
+- Ollama serving `nomic-embed-text` (768-dim) at `http://192.168.15.103:11434`
 - PostgreSQL 16 with pgvector in Docker (on homelab cluster — `192.168.15.97`)
-- NVIDIA container toolkit (GPU for other services; TEI runs on CPU here)
+- NVIDIA container toolkit (GPU-accelerated inference via Ollama)

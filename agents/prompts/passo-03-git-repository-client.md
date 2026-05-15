@@ -1,5 +1,18 @@
 # Prompt — Passo 3: GitRepositoryClient (clone/pull + listagem de arquivos)
 
+> [!WARNING]
+> **Status: SUPERSEDED / NÃO EXECUTAR COMO CAMINHO PRINCIPAL**
+>
+> Este prompt foi substituído pela decisão arquitetural de seguir com ingestão event-driven:
+>
+> `GitHub PR mergeado → Pub/Sub → Knowledge Ingestion Worker`
+>
+> O `GitRepositoryClient` baseado em clone/pull local poderá ser mantido futuramente apenas como adapter auxiliar/fallback/local-dev, mas não deve ser o caminho principal de ingestão do produto.
+>
+> Novo prompt principal:
+>
+> `agents/prompts/passo-03-event-driven-document-source-ingestion.md`
+
 > Use este prompt em uma sessão limpa de outro chat (Claude Code, Cursor, etc.) para executar **somente o Passo 3** do plano de implementação. Cole tudo da seção "PROMPT" abaixo.
 
 ---

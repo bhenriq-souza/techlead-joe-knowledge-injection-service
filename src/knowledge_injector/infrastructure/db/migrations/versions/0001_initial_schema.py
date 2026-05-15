@@ -90,14 +90,14 @@ def upgrade() -> None:
         sa.Column("content", sa.Text, nullable=False),
         sa.Column("content_hash", sa.String(64), nullable=False),
         sa.Column("token_count", sa.Integer, nullable=True),
-        sa.Column("embedding", sa.Text, nullable=True),  # placeholder — replaced below with vector(384)
+        sa.Column("embedding", sa.Text, nullable=True),  # placeholder — replaced below with vector(768)
         sa.Column("metadata", JSONB, nullable=False, server_default="{}"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         schema=SCHEMA,
     )
 
-    # Replace the placeholder text column with a proper vector(384)
+    # Replace the placeholder text column with a proper vector — dimension updated in 0002
     op.execute(f'ALTER TABLE {SCHEMA}.knowledge_chunks DROP COLUMN embedding')
     op.execute(f'ALTER TABLE {SCHEMA}.knowledge_chunks ADD COLUMN embedding vector(384) NULL')
 

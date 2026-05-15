@@ -1,6 +1,6 @@
 # Implementation Plan — knowledge-injector MVP end-to-end
 
-> Objetivo: sair do estado atual (schema criado, todo o resto stub) para um `run-once` que clona o repositório `homelab-infra`, descobre arquivos, gera chunks, gera embeddings via TEI e persiste tudo no Postgres, com a `ingestion_runs` registrando o resultado.
+> Objetivo: sair do estado atual (schema criado, todo o resto stub) para um `run-once` que clona o repositório `homelab-infra`, descobre arquivos, gera chunks, gera embeddings via Ollama e persiste tudo no Postgres, com a `ingestion_runs` registrando o resultado.
 
 ---
 
@@ -9,21 +9,22 @@
 | Componente | Estado | Observação |
 |---|---|---|
 | Migração Alembic `0001` | ✅ Aplicada | Schema `knowledge` + 4 tabelas + índice HNSW em `vector(384)` |
+| Migração Alembic `0002` | ✅ Aplicada | Altera coluna `embedding` de `vector(384)` para `vector(768)` (nomic-embed-text via Ollama) |
 | `domain/models.py`, `domain/ports.py` | ✅ Pronto | Dataclasses + ABCs já refletem o schema |
 | `infrastructure/db/orm.py` | ✅ Pronto | ORM models alinhados com a migração |
 | `config.py` (Pydantic Settings) | ✅ Pronto | Carrega `.env` automaticamente |
 | `cli/commands.py` | ✅ Pronto | `run-once`, `run-loop`, `db-migrate` |
 | `containers.py` (DI) | ⚠️ Parcial | Falta wirar repositórios e session factory no `IngestionService` |
+| `infrastructure/db/database.py` | ✅ Completo | Engine + session factory + health_check implementados |
+| `infrastructure/db/repositories.py` | ✅ Completo | 4 repositórios implementados com upsert, queries e embedding via SQL textual |
 | `infrastructure/git/git_repository_client.py` | 🚧 Stub | `NotImplementedError` |
-| `infrastructure/db/database.py` | 🚧 Stub | `NotImplementedError` |
-| `infrastructure/db/repositories.py` | 🚧 Vazio | Só TODO |
 | `application/chunking_service.py` | 🚧 Stub | `NotImplementedError` |
-| `infrastructure/embeddings/tei_embeddings_client.py` | 🚧 Stub | `NotImplementedError` |
+| `infrastructure/embeddings/ollama_embeddings_client.py` | 🚧 Stub | `NotImplementedError` |
 | `application/ingestion_service.py` | 🚧 Stub | Apenas log |
 
 **Ambientes validados:**
 - Postgres `192.168.15.97:5432` / DB `homelab_ai` / role `appuser` / schema `knowledge`, pgvector 0.8.2.
-- TEI `http://127.0.0.1:8080`, modelo `BAAI/bge-small-en-v1.5`, 384 dimensões, endpoint `/v1/embeddings` (compat OpenAI) confirmado.
+- Ollama `http://192.168.15.103:11434`, modelo `nomic-embed-text`, 768 dimensões, endpoint `/api/embed` confirmado.
 
 ---
 
@@ -63,7 +64,7 @@ IngestionService.run_once()
 
 A ordem é deliberada: cada passo só depende do anterior. Cada passo termina com **algo executável e verificável** — não é tudo-ou-nada.
 
-### Passo 1 — `Database`: engine + session factory
+### ~~Passo 1 — `Database`: engine + session factory~~ ✅ Implementado
 
 **Arquivo:** [src/knowledge_injector/infrastructure/db/database.py](../src/knowledge_injector/infrastructure/db/database.py)
 
@@ -76,7 +77,7 @@ A ordem é deliberada: cada passo só depende do anterior. Cada passo termina co
 
 ---
 
-### Passo 2 — Repositories (SQLAlchemy adapters dos ports)
+### ~~Passo 2 — Repositories (SQLAlchemy adapters dos ports)~~ ✅ Implementado
 
 **Arquivo:** [src/knowledge_injector/infrastructure/db/repositories.py](../src/knowledge_injector/infrastructure/db/repositories.py)
 
@@ -97,26 +98,151 @@ Implementar 4 classes implementando os ports já definidos:
 
 ---
 
-### Passo 3 — `GitRepositoryClient` (Phase 2)
+### ~~Passo 3 — `GitRepositoryClient` (clone/pull local)~~ → SUPERSEDED
 
-**Arquivo:** [src/knowledge_injector/infrastructure/git/git_repository_client.py](../src/knowledge_injector/infrastructure/git/git_repository_client.py)
+> **Decisão arquitetural (2026-05-15):** O Passo 3 original foi substituído pela abordagem de ingestão event-driven.
+>
+> O `GitRepositoryClient` baseado em clone/pull local pode ser mantido futuramente como adapter auxiliar (fallback / local-dev), mas **não é o caminho principal de ingestão do produto**.
+>
+> Consulte: [agents/prompts/passo-03-git-repository-client.md](../agents/prompts/passo-03-git-repository-client.md) (prompt original, mantido como referência)  
+> Consulte: [docs/architecture/knowledge-ingestion-event-driven.md](architecture/knowledge-ingestion-event-driven.md) (decisão completa)
 
-- `sync()`:
-  - Se `workdir` não existe ou não é um repo válido → `git.Repo.clone_from(repo_url, workdir, branch=branch)`.
-  - Se já existe → `repo.remotes.origin.fetch()` + `repo.git.checkout(branch)` + `repo.git.reset("--hard", f"origin/{branch}")`.
-  - Retornar `repo.head.commit.hexsha`.
-- `list_files(base_path, include_patterns, exclude_patterns)`:
-  - Caminhar a partir de `workdir/base_path`.
-  - Aplicar `pathlib.PurePath.match()` para include/exclude (semântica glob).
-  - Para cada arquivo elegível: ler bytes, decodificar utf-8 (errors="replace"), calcular `sha256` do conteúdo.
-  - `relative_path` é relativo a `workdir/base_path` (canonical key para upsert).
-  - Retornar `list[FileEntry]`.
+---
 
-**Pegadinhas:**
-- `auth_mode != "none"` no MVP é fora de escopo — quando vier, implementar via `GIT_ASKPASS` ou URL com token. Por enquanto: `if auth_mode != "none": raise NotImplementedError(...)`.
-- Tamanho máximo por arquivo: skipar arquivos > 5 MB (proteção). Logar warning.
+### Passo 3 — Event-driven Document Source Ingestion
 
-**Validação:** apontar para o `homelab-infra` local via `file:///home/brunohsouza/code/Personal/homelab-infra`, rodar `sync()` e `list_files(...)`, conferir contagem de arquivos.
+**Decisão:** O serviço não deve ser tratado como um "Git repository indexer". Ele deve ser um serviço de ingestão controlada de fontes documentais aprovadas.
+
+**Novo fluxo principal:**
+
+```text
+GitHub PR mergeado
+  → GitHub/GitHub Actions publica evento normalizado no Pub/Sub
+  → Knowledge Ingestion Worker consome evento
+  → Worker consulta catálogo (fonte de verdade)
+  → Worker resolve ambiente pela branch de destino
+  → Worker calcula delta (arquivos alterados no merge)
+  → Worker baixa apenas documentos permitidos via GitHub API
+  → Worker atualiza documentos, chunks e embeddings
+```
+
+**Princípios:**
+
+- O catálogo é a fonte de verdade: projeto, serviço, repositório, ambiente, branch monitorada, `allowed_paths`, `blocked_paths`, tipo documental e nível de confiança.
+- O worker **não confia cegamente no evento**: consulta o catálogo antes de baixar qualquer conteúdo.
+- O worker baixa apenas documentos **alterados e permitidos** (delta, não clone completo).
+- Arquivos `removed` e `renamed` também atualizam o banco.
+- O initial sync ocorre quando o repositório é associado ao catálogo (processa todos os paths permitidos, não o repo inteiro).
+- O incremental sync ocorre quando um PR é mergeado na branch configurada para o ambiente.
+- Reconciliação periódica garante consistência mesmo sem eventos.
+- Clone/pull local deixa de ser caminho principal.
+
+**Branch por ambiente (exemplo):**
+
+| Branch | Ambiente |
+|--------|----------|
+| `develop` | `dev` |
+| `homolo` | `hml` |
+| `main` | `prd` |
+
+**Prompt principal:** [agents/prompts/passo-03-event-driven-document-source-ingestion.md](../agents/prompts/passo-03-event-driven-document-source-ingestion.md)
+
+---
+
+## Backlog — Event-driven Knowledge Ingestion
+
+Organizado em fases incrementais. Cada fase termina com algo verificável.
+
+### Passo 3.1 — Revisão de domínio e contratos
+
+- Criar modelo de evento normalizado (`SourceIngestionEvent` ou similar).
+- Criar modelo para mapeamento branch → ambiente.
+- Revisar `KnowledgeSource` para suportar `provider`, `environment`, `branch`, `allowed_paths`, `blocked_paths`.
+- Criar port `RepositoryContentClientPort` (separado de `RepositoryClientPort`, foco em conteúdo via API, sem sync local).
+- Criar port `IngestionEventConsumerPort` para consumo de eventos.
+- Não implementar Pub/Sub nem GitHub API neste passo.
+
+**Prompt:** [agents/prompts/passo-03-event-driven-document-source-ingestion.md](../agents/prompts/passo-03-event-driven-document-source-ingestion.md)
+
+### Passo 3.2 — GitHub Actions → Pub/Sub (template + infra)
+
+O passo 3.2 é dividido em duas partes paralelas:
+
+**3.2a — Template do workflow GitHub Actions:**
+
+- Criar template em `docs/examples/github-actions/knowledge-ingestion-trigger.yml`.
+- O workflow fica no **repositório cliente** — o template é copiado pelo time responsável.
+- Acionar em `pull_request` tipo `closed` com `merged == true`.
+- Extrair `base.ref`, PR number, merge commit SHA, base SHA, head SHA.
+- Publicar evento normalizado no Pub/Sub via WIF.
+- Documentar pré-requisitos e passo a passo em `docs/examples/github-actions/README.md`.
+
+**Prompt:** [agents/prompts/passo-04-github-actions-to-pubsub.md](../agents/prompts/passo-04-github-actions-to-pubsub.md)
+
+**3.2b — Infraestrutura Pub/Sub (Terraform no `techlead-joe-infra`):**
+
+- Criar tópico `knowledge-ingestion-events` e subscription `knowledge-ingestion-events-sub`.
+- Criar service accounts: `ki-publisher` (GitHub Actions via WIF) e `ki-consumer` (worker Python).
+- Configurar Workload Identity Federation para autenticação sem chaves SA.
+- IAM bindings: publisher → tópico, consumer → subscription.
+
+**Prompt:** [agents/prompts/passo-04b-terraform-pubsub-infra.md](../agents/prompts/passo-04b-terraform-pubsub-infra.md)
+
+### Passo 3.3 — Pub/Sub Ingestion Consumer
+
+- Criar adapter `PubSubConsumer` em `infrastructure/pubsub/`.
+- Deserializar e validar schema do evento.
+- Chamar application handler/service.
+- Garantir logs estruturados e idempotência preparada.
+
+**Prompt:** [agents/prompts/passo-05-pubsub-ingestion-consumer.md](../agents/prompts/passo-05-pubsub-ingestion-consumer.md)
+
+### Passo 3.4 — GitHub Content Client
+
+- Criar adapter `GithubContentClient` em `infrastructure/github/`.
+- Resolver diff do merge (`base_sha..head_sha`) via GitHub API.
+- Identificar `added`, `modified`, `removed`, `renamed`.
+- Baixar conteúdo apenas dos arquivos permitidos.
+- Devolver objetos compatíveis com o domínio (`FileEntry`).
+- Evitar clone/diretório temporário como caminho principal.
+
+**Prompt:** [agents/prompts/passo-06-github-content-client.md](../agents/prompts/passo-06-github-content-client.md)
+
+### Passo 3.5 — Incremental Ingestion Handler
+
+- Implementar handler de ingestão incremental (application layer).
+- Consultar catálogo / source config.
+- Validar ambiente pela branch de destino.
+- Aplicar `allowed_paths` / `blocked_paths`.
+- Atualizar `knowledge_documents` (added, modified, removed, renamed).
+- Gerar chunks (`ChunkingService`) e embeddings (`OllamaEmbeddingsClient`).
+- Atualizar `knowledge_chunks`.
+- Criar e finalizar `ingestion_runs` com contadores.
+- Manter idempotência por `source_id + environment + merge_commit_sha`.
+
+**Prompt:** [agents/prompts/passo-07-incremental-ingestion-handler.md](../agents/prompts/passo-07-incremental-ingestion-handler.md)
+
+### Passo 3.6 — Initial Sync
+
+- Implementar initial sync disparado quando fonte é cadastrada no catálogo.
+- Processar todos os documentos listados em `allowed_paths`.
+- Não processar o repositório inteiro.
+- Reutilizar `GithubContentClient` e `ChunkingService`.
+
+### Passo 3.7 — Reconciliação Periódica
+
+- Implementar modo `full_allowed_sources_sync`.
+- Comparar estado atual do catálogo com documentos persistidos.
+- Corrigir divergências sem clonar o repositório inteiro.
+
+### Passo 3.8 — Testes
+
+- Testes unitários para validação de evento (`SourceIngestionEvent`).
+- Testes unitários para filtro por branch/ambiente.
+- Testes unitários para `allowed_paths` / `blocked_paths`.
+- Testes do `GithubContentClient` com mocks de HTTP.
+- Testes do handler incremental com mocks de ports.
+- Teste de idempotência (mesmo `merge_commit_sha` não reprocessa).
 
 ---
 
@@ -139,23 +265,24 @@ Implementar 4 classes implementando os ports já definidos:
 
 ---
 
-### Passo 5 — `TeiEmbeddingsClient` (Phase 5)
+### Passo 5 — `OllamaEmbeddingsClient` (Phase 5)
 
-**Arquivo:** [src/knowledge_injector/infrastructure/embeddings/tei_embeddings_client.py](../src/knowledge_injector/infrastructure/embeddings/tei_embeddings_client.py)
+**Arquivo:** [src/knowledge_injector/infrastructure/embeddings/ollama_embeddings_client.py](../src/knowledge_injector/infrastructure/embeddings/ollama_embeddings_client.py)
 
 - `embed(texts) -> list[list[float]]`:
   - `httpx.Client(timeout=60.0)` (instance-level, reaproveitar entre chamadas).
-  - POST `{base_url}{embeddings_path}` (`/v1/embeddings`) com payload `{"input": texts, "model": model}`.
-  - Resposta: `{"data": [{"embedding": [...], "index": i}, ...]}`.
-  - Ordenar por `index` para garantir alinhamento com a entrada.
-  - Validar que cada vetor tem `dimensions` (384) — se não, raise erro descritivo.
-  - Batch de tamanho 32 por requisição (TEI aguenta mais, mas 32 é seguro). Se `len(texts) > 32`, dividir e concatenar.
+  - POST `{base_url}{embeddings_path}` (`/api/embed`) com payload `{"model": model, "input": texts}`.
+  - Resposta: `{"model": "...", "embeddings": [[...], [...]]}`.
+  - A ordem da resposta é garantida por posição (alinhada com a entrada).
+  - Validar que cada vetor tem `dimensions` (768) — se não, raise erro descritivo.
+  - Batch de tamanho 32 por requisição. Se `len(texts) > 32`, dividir e concatenar.
 
 **Pegadinhas:**
-- Texto vazio → TEI rejeita. Filtrar `texts` vazios antes de mandar; o caller é responsável por reinjetar `[]` na posição correta (ou levantar — no MVP, levanta).
+- Texto vazio → Ollama pode rejeitar. Filtrar `texts` vazios antes de mandar; no MVP, levanta se `texts` estiver vazio.
 - Retry: 1 retry com backoff de 2s para 5xx. Sem retry em 4xx.
+- O modelo precisa estar baixado no Ollama antes da primeira chamada (`ollama pull nomic-embed-text`).
 
-**Validação:** chamada direta com `["hello world"]` retorna lista de 1 vetor de 384 floats.
+**Validação:** chamada direta com `["hello world"]` retorna lista de 1 vetor de 768 floats.
 
 ---
 
@@ -326,10 +453,10 @@ ingestion_service = providers.Factory(
 4. Editar um arquivo no `homelab-infra`, rodar de novo — deve aparecer `files_changed=1` e os chunks daquele documento atualizados.
 5. Smoke RAG:
    ```bash
-   QVEC=$(curl -s http://127.0.0.1:8080/v1/embeddings \
+   QVEC=$(curl -s http://192.168.15.103:11434/api/embed \
      -H "Content-Type: application/json" \
-     -d '{"input":"como funciona o cluster","model":"BAAI/bge-small-en-v1.5"}' \
-     | python -c "import sys,json; v=json.load(sys.stdin)['data'][0]['embedding']; print('['+','.join(str(x) for x in v)+']')")
+     -d '{"model":"nomic-embed-text","input":["como funciona o cluster"]}' \
+     | python -c "import sys,json; v=json.load(sys.stdin)['embeddings'][0]; print('['+','.join(str(x) for x in v)+']')")
    psql ... -c "SELECT d.path, left(c.content, 80), 1-(c.embedding<=>'$QVEC'::vector) AS sim
                 FROM knowledge.knowledge_chunks c
                 JOIN knowledge.knowledge_documents d ON d.id=c.document_id
@@ -342,16 +469,18 @@ ingestion_service = providers.Factory(
 
 Tudo abaixo fica para iterações futuras — **não** entrar no MVP:
 
+- `GitRepositoryClient` como caminho principal de produção (pode ser mantido como fallback/local-dev).
+- Webhook Receiver próprio — evento disparado diretamente pelo GitHub/GitHub Actions para Pub/Sub.
 - Chunking markdown-aware (header splitting). Hoje é por chars.
 - Async pipeline (asyncpg / asyncio).
-- Auth git via token/SSH.
+- Auth git via token/SSH para clone local.
 - Métricas Prometheus, OpenTelemetry tracing.
 - Retry com exponential backoff sofisticado.
-- Manifests Kubernetes (CronJob) — Phase 7 do README.
-- Suporte a múltiplas `KnowledgeSource` por execução (hoje é uma só, vinda do `.env`).
+- Manifests Kubernetes (CronJob) — fase posterior.
 - Tokenização real (`token_count` fica `None`).
 - Deduplicação inter-documento de chunks idênticos.
 - Limpeza incremental de embeddings órfãos (FK ON DELETE CASCADE já cuida do caso simples).
+- Interface de catálogo completa — no MVP o catálogo pode ser simplificado via config/env.
 
 ---
 
@@ -360,7 +489,7 @@ Tudo abaixo fica para iterações futuras — **não** entrar no MVP:
 | Risco | Probabilidade | Mitigação |
 |---|---|---|
 | `pgvector` não exposto via SQLAlchemy core sem o tipo customizado | Média | Usar `pgvector.sqlalchemy.Vector` (já em `pyproject.toml`) ou `cast(:val AS vector)` em SQL textual |
-| TEI rejeitar batch grande de markdown | Baixa | Batch de 32, com retry, e logar size |
+| Ollama rejeitar batch grande de markdown | Baixa | Batch de 32, com retry, e logar size |
 | Repo `homelab-infra` não acessível por HTTPS | Média | Apontar `KNOWLEDGE_REPO_URL` para `file:///home/brunohsouza/code/Personal/homelab-infra` durante dev |
 | Encoding de arquivos não utf-8 | Baixa | `decode("utf-8", errors="replace")` no leitor + log de warning |
 | `appuser` sem permissão para INSERT em `knowledge.*` | Baixa | Ele já criou o schema na migração; se faltar, `GRANT ALL ON ALL TABLES IN SCHEMA knowledge TO appuser` |
@@ -374,7 +503,7 @@ Tudo abaixo fica para iterações futuras — **não** entrar no MVP:
 2. ✅ `knowledge_sources` tem 1 linha após o primeiro run.
 3. ✅ `ingestion_runs` mostra `status='succeeded'`, `repo_commit_sha` preenchido, contadores coerentes.
 4. ✅ `knowledge_documents.count` > 0, todos com `status='active'` e `content_hash` preenchido.
-5. ✅ `knowledge_chunks.count` > 0, todos com `embedding IS NOT NULL` e dimensão 384.
+5. ✅ `knowledge_chunks.count` > 0, todos com `embedding IS NOT NULL` e dimensão 768.
 6. ✅ Re-run sem mudança no repo: `chunks_created=0`, `files_changed=0`.
 7. ✅ Edição de arquivo + re-run: documento ganha versão atualizada (mesmo `id`), chunks substituídos.
 8. ✅ Query de similaridade retorna top-K com `cosine_sim` razoável (>0.3 para query relacionada).
@@ -383,16 +512,21 @@ Tudo abaixo fica para iterações futuras — **não** entrar no MVP:
 
 ## 8. Estimativa de esforço
 
-| Passo | Esforço |
-|---|---|
-| 1. Database engine | 15 min |
-| 2. Repositories (4) | 60 min |
-| 3. GitRepositoryClient | 30 min |
-| 4. ChunkingService (MVP) | 20 min |
-| 5. TeiEmbeddingsClient | 30 min |
-| 6. IngestionService | 60 min |
-| 7. Container wiring | 15 min |
-| 8. Smoke test + correções | 30 min |
-| **Total** | **~4h focadas** |
+| Passo | Esforço | Status |
+|---|---|---|
+| ~~1. Database engine~~ | ~~15 min~~ | ✅ |
+| ~~2. Repositories (4)~~ | ~~60 min~~ | ✅ |
+| 3.1 Revisão de domínio e contratos | 45 min | |
+| 3.2 GitHub Actions → Pub/Sub (workflow YAML) | 30 min | |
+| 3.3 Pub/Sub Ingestion Consumer | 60 min | |
+| 3.4 GitHub Content Client | 60 min | |
+| 3.5 Incremental Ingestion Handler | 90 min | |
+| 3.6 Initial Sync | 45 min | |
+| 3.7 Reconciliação periódica | 30 min | |
+| 3.8 Testes | 60 min | |
+| ChunkingService (necessário para 3.5) | 20 min | |
+| OllamaEmbeddingsClient (necessário para 3.5) | 30 min | |
+| Container wiring + smoke test | 30 min | |
+| **Restante estimado** | **~9h** | |
 
-Realístico em 1-2 sessões de trabalho.
+> **Nota:** `GitRepositoryClient` (Passo 3 original, 30 min) foi removido do caminho principal. O `GithubContentClient` (Passo 3.4) substitui sua função core.

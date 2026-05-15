@@ -93,16 +93,16 @@ class IngestionSettings(BaseSettings):
 class EmbeddingsSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="EMBEDDINGS_", extra="ignore", env_file=".env", env_file_encoding="utf-8")
 
-    provider: str = Field(default="tei")
-    model: str = Field(default="BAAI/bge-small-en-v1.5")
-    dimensions: int = Field(default=384)
+    provider: str = Field(default="ollama")
+    model: str = Field(default="nomic-embed-text")
+    dimensions: int = Field(default=768)
 
 
-class TeiSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="TEI_", extra="ignore", env_file=".env", env_file_encoding="utf-8")
+class OllamaSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="OLLAMA_", extra="ignore", env_file=".env", env_file_encoding="utf-8")
 
-    base_url: str = Field(default="http://127.0.0.1:8080")
-    embeddings_path: str = Field(default="/v1/embeddings")
+    base_url: str = Field(default="http://127.0.0.1:11434")
+    embeddings_path: str = Field(default="/api/embed")
 
     @property
     def embeddings_url(self) -> str:
@@ -126,7 +126,7 @@ class AppSettings(BaseSettings):
     knowledge_source: KnowledgeSourceSettings = Field(default_factory=KnowledgeSourceSettings)
     ingestion: IngestionSettings = Field(default_factory=IngestionSettings)
     embeddings: EmbeddingsSettings = Field(default_factory=EmbeddingsSettings)
-    tei: TeiSettings = Field(default_factory=TeiSettings)
+    ollama: OllamaSettings = Field(default_factory=OllamaSettings)
     chunking: ChunkingSettings = Field(default_factory=ChunkingSettings)
 
     @classmethod
@@ -136,6 +136,6 @@ class AppSettings(BaseSettings):
             knowledge_source=KnowledgeSourceSettings(),
             ingestion=IngestionSettings(),
             embeddings=EmbeddingsSettings(),
-            tei=TeiSettings(),
+            ollama=OllamaSettings(),
             chunking=ChunkingSettings(),
         )
