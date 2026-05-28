@@ -18,7 +18,9 @@ SCHEMA = "knowledge"
 def upgrade() -> None:
     # HNSW index must be dropped before altering the vector dimension
     op.execute(f"DROP INDEX IF EXISTS {SCHEMA}.ix_knowledge_chunks_embedding_hnsw")
-    op.execute(f"ALTER TABLE {SCHEMA}.knowledge_chunks ALTER COLUMN embedding TYPE vector(768) USING NULL::vector(768)")
+    op.execute(
+        f"ALTER TABLE {SCHEMA}.knowledge_chunks ALTER COLUMN embedding TYPE vector(768) USING NULL::vector(768)"
+    )
 
     op.execute(
         f"""
@@ -32,7 +34,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute(f"DROP INDEX IF EXISTS {SCHEMA}.ix_knowledge_chunks_embedding_hnsw")
-    op.execute(f"ALTER TABLE {SCHEMA}.knowledge_chunks ALTER COLUMN embedding TYPE vector(384) USING NULL::vector(384)")
+    op.execute(
+        f"ALTER TABLE {SCHEMA}.knowledge_chunks ALTER COLUMN embedding TYPE vector(384) USING NULL::vector(384)"
+    )
 
     op.execute(
         f"""

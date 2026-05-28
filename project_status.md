@@ -34,14 +34,18 @@ Branch atual: `feat/repo-client` (limpo, sem pendências).
 
 **Status: Planejado, não iniciado.** Plano em 4 etapas sequenciais:
 
-1. **Terraform WIF + Secrets** (homelab-infra) — adicionar `techlead-joe-*` ao allowlist OIDC e cadastrar secrets no GCP Secret Manager
+1. **Terraform WIF + Secrets** (homelab-infra) — adicionar `techlead-joe-*` ao allowlist OIDC e cadastrar secrets no GCP Secret Manager  
+   _Base já existente em homelab-infra/homelab-gitops: WIF pool/provider GitHub OIDC, Artifact Registry `homelab-apps`, ESO operacional com ClusterSecretStore gcp-dev/prd. Esforço restante: apenas SA + secrets específicos do techlead-joe._
 2. **Criar `techlead-joe-gitops`** — manifests Kubernetes + ExternalSecrets para o `knowledge-injection-service`
-3. **ArgoCD AppProject + Application** (homelab-gitops) — apontando para `techlead-joe-gitops` no cluster ai-lab
-4. **Workflow CI** no repo da aplicação — chamando o workflow reutilizável do homelab
+3. **ArgoCD AppProject + Application** (homelab-gitops) — apontando para `techlead-joe-gitops` no cluster ai-lab  
+   _Scaffold `clusters/ai-lab` já existe em `homelab-gitops` (bootstrap/root, platform/external-secrets, platform/shared-config). Aguarda apenas K3s + ArgoCD bootstrap no host._
+4. **Workflow CI** no repo da aplicação — chamando o workflow reutilizável do homelab  
+   _Workflow reutilizável `docker-build-push.yaml` já implementado em `homelab-gitops/.github/workflows/`. Suporta `workflow_call` com inputs para app-name, environment, registry-url e gitops-repo. **Limitação:** manifest path está hardcoded para `clusters/homelab/workloads/{env}/manifests/{app-name}/deployment.yaml` — para ai-lab precisará de um parâmetro `gitops-cluster` ou path override._
 
 Prompts de implementação por etapa já estão em `techlead-joe-infra/agents/prompts/`.
 
-**Dependência bloqueante:** cluster ai-lab com k3s ativo + ArgoCD bootstrapped (item 1.9, também não iniciado).
+**Dependência bloqueante:** cluster ai-lab com k3s ativo + ArgoCD bootstrapped (item 1.9, também não iniciado).  
+**Nota operacional:** Terraform cutover (`homelab-root` → `homelab-gitops`) ainda pendente de `terraform apply` em homelab-infra — não bloqueia o techlead-joe mas deve ser concluído antes de qualquer alteração no bootstrap do cluster homelab.
 
 ---
 

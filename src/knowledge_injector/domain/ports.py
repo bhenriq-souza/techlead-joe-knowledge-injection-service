@@ -71,7 +71,9 @@ class KnowledgeDocumentRepositoryPort(ABC):
     """Port for persisting KnowledgeDocument entities."""
 
     @abstractmethod
-    def upsert(self, document: KnowledgeDocument, session: Session) -> KnowledgeDocument:
+    def upsert(
+        self, document: KnowledgeDocument, session: Session
+    ) -> KnowledgeDocument:
         """Insert or update a document, returning the persisted entity."""
 
     @abstractmethod

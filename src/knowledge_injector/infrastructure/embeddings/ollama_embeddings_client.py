@@ -27,4 +27,6 @@ class OllamaEmbeddingsClient(EmbeddingsClientPort):
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         # TODO Phase 5: POST to Ollama /api/embed and return vectors
-        raise NotImplementedError("OllamaEmbeddingsClient.embed() will be implemented in Phase 5")
+        raise NotImplementedError(
+            "OllamaEmbeddingsClient.embed() will be implemented in Phase 5"
+        )

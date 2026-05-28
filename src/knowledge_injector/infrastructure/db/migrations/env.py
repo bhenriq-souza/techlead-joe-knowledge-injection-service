@@ -31,6 +31,7 @@ SCHEMA = settings.database.schema_
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
+
 def _include_object(obj, name, type_, reflected, compare_to):
     """Only manage objects inside the knowledge schema."""
     if type_ == "table":
@@ -57,6 +58,7 @@ def _ensure_schema_and_extensions(connection) -> None:
 
 # ── offline mode ─────────────────────────────────────────────────────────────
 
+
 def run_migrations_offline() -> None:
     url = alembic_cfg.get_main_option("sqlalchemy.url")
     context.configure(
@@ -75,6 +77,7 @@ def run_migrations_offline() -> None:
 
 # ── online mode ──────────────────────────────────────────────────────────────
 
+
 def run_migrations_online() -> None:
     connectable = engine_from_config(
         alembic_cfg.get_section(alembic_cfg.config_ini_section, {}),
@@ -92,4 +95,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-

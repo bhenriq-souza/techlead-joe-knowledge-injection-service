@@ -27,7 +27,9 @@ class GitRepositoryClient(RepositoryClientPort):
 
     def sync(self) -> str:
         # TODO Phase 2: implement clone / pull and return HEAD sha
-        raise NotImplementedError("GitRepositoryClient.sync() will be implemented in Phase 2")
+        raise NotImplementedError(
+            "GitRepositoryClient.sync() will be implemented in Phase 2"
+        )
 
     def list_files(
         self,

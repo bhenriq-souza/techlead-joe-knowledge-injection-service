@@ -18,4 +18,6 @@ class ChunkingService:
 
     def chunk(self, file_entry: FileEntry, document_id=None) -> list[KnowledgeChunk]:
         # TODO Phase 4: implement Markdown header splitting + size fallback
-        raise NotImplementedError("ChunkingService.chunk() will be implemented in Phase 4")
+        raise NotImplementedError(
+            "ChunkingService.chunk() will be implemented in Phase 4"
+        )

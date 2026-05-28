@@ -8,7 +8,10 @@ from dependency_injector.wiring import Provide, inject
 from knowledge_injector.application.ingestion_service import IngestionService
 from knowledge_injector.config import AppSettings
 from knowledge_injector.containers import Container
-from knowledge_injector.infrastructure.logging.logger import configure_logging, get_logger
+from knowledge_injector.infrastructure.logging.logger import (
+    configure_logging,
+    get_logger,
+)
 
 logger = get_logger(__name__)
 
@@ -73,7 +76,9 @@ def run_loop(
     try:
         ingestion_service.run_loop(interval_minutes=effective_interval)
     except KeyboardInterrupt:
-        logger.info("cli.run_loop.interrupted", message="Interrupted by user, shutting down")
+        logger.info(
+            "cli.run_loop.interrupted", message="Interrupted by user, shutting down"
+        )
         sys.exit(0)
     except Exception as exc:  # noqa: BLE001
         logger.error("cli.run_loop.error", error=str(exc), exc_info=True)

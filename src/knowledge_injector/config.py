@@ -15,7 +15,12 @@ def _parse_csv(value: str | list[str], default: list[str]) -> list[str]:
 
 
 class DatabaseSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="POSTGRES_", extra="ignore", env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_prefix="POSTGRES_",
+        extra="ignore",
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
 
     host: str = Field(default="localhost")
     port: int = Field(default=5432)
@@ -38,7 +43,12 @@ class DatabaseSettings(BaseSettings):
 
 
 class KnowledgeSourceSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="KNOWLEDGE_", extra="ignore", env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_prefix="KNOWLEDGE_",
+        extra="ignore",
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
 
     source_name: str = Field(default="default-source", alias="KNOWLEDGE_SOURCE_NAME")
     repo_url: str = Field(default="", alias="KNOWLEDGE_REPO_URL")
@@ -56,7 +66,12 @@ class IngestionSettings(BaseSettings):
         INGESTION_INCLUDE_PATTERNS=**/*.md,**/*.txt,**/*.yaml
     """
 
-    model_config = SettingsConfigDict(env_prefix="INGESTION_", extra="ignore", env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_prefix="INGESTION_",
+        extra="ignore",
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
 
     interval_minutes: int = Field(default=60)
     workdir: str = Field(default="/tmp/knowledge-injector")
@@ -91,7 +106,12 @@ class IngestionSettings(BaseSettings):
 
 
 class EmbeddingsSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="EMBEDDINGS_", extra="ignore", env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_prefix="EMBEDDINGS_",
+        extra="ignore",
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
 
     provider: str = Field(default="ollama")
     model: str = Field(default="nomic-embed-text")
@@ -99,7 +119,9 @@ class EmbeddingsSettings(BaseSettings):
 
 
 class OllamaSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="OLLAMA_", extra="ignore", env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_prefix="OLLAMA_", extra="ignore", env_file=".env", env_file_encoding="utf-8"
+    )
 
     base_url: str = Field(default="http://127.0.0.1:11434")
     embeddings_path: str = Field(default="/api/embed")
@@ -110,20 +132,26 @@ class OllamaSettings(BaseSettings):
 
 
 class ChunkingSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CHUNK_", extra="ignore", env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_prefix="CHUNK_", extra="ignore", env_file=".env", env_file_encoding="utf-8"
+    )
 
     size: int = Field(default=1000)
     overlap: int = Field(default=150)
 
 
 class AppSettings(BaseSettings):
-    model_config = SettingsConfigDict(extra="ignore", env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        extra="ignore", env_file=".env", env_file_encoding="utf-8"
+    )
 
     app_env: str = Field(default="dev")
     log_level: str = Field(default="INFO")
 
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
-    knowledge_source: KnowledgeSourceSettings = Field(default_factory=KnowledgeSourceSettings)
+    knowledge_source: KnowledgeSourceSettings = Field(
+        default_factory=KnowledgeSourceSettings
+    )
     ingestion: IngestionSettings = Field(default_factory=IngestionSettings)
     embeddings: EmbeddingsSettings = Field(default_factory=EmbeddingsSettings)
     ollama: OllamaSettings = Field(default_factory=OllamaSettings)

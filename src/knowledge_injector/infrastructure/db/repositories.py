@@ -272,8 +272,6 @@ class KnowledgeChunkRepository(KnowledgeChunkRepositoryPort):
         return chunks
 
     def delete_for_document(self, document_id: UUID, session: Session) -> int:
-        result = session.execute(
-            self._DELETE_SQL, {"document_id": str(document_id)}
-        )
+        result = session.execute(self._DELETE_SQL, {"document_id": str(document_id)})
         session.flush()
         return result.rowcount or 0

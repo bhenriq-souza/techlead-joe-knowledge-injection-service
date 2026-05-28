@@ -12,13 +12,17 @@ class IngestionService:
     """
 
     def run_once(self) -> None:
-        logger.info("ingestion.run_once.started", message="Starting single ingestion run")
+        logger.info(
+            "ingestion.run_once.started", message="Starting single ingestion run"
+        )
         # TODO Phase 2: Git sync + file discovery
         # TODO Phase 3: DB persistence
         # TODO Phase 4: Chunking
         # TODO Phase 5: TEI embeddings
         # TODO Phase 6: Incremental processing
-        logger.info("ingestion.run_once.finished", message="Ingestion run complete (stub)")
+        logger.info(
+            "ingestion.run_once.finished", message="Ingestion run complete (stub)"
+        )
 
     def run_loop(self, interval_minutes: int) -> None:
         import time
